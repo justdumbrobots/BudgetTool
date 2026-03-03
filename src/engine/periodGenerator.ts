@@ -115,6 +115,25 @@ export function getCurrentPeriodIndex(periods: PayPeriod[]): number {
 }
 
 /**
+ * Find the period index that contains the given date.
+ * Returns -1 if the date falls outside all generated periods.
+ */
+export function getPeriodIndexForDate(date: Date, periods: PayPeriod[]): number {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+
+  for (let i = 0; i < periods.length; i++) {
+    const start = new Date(periods[i].payDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(periods[i].nextPayDate);
+    end.setHours(0, 0, 0, 0);
+    if (d >= start && d < end) return i;
+  }
+
+  return -1;
+}
+
+/**
  * Find the most recently completed period (payDate ≤ today).
  * Used for the dashboard "current balance" reading.
  */
