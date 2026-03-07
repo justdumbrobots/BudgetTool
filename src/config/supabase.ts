@@ -13,5 +13,5 @@
  *        your-app-scheme://  (for production builds)
  */
 
-export const SUPABASE_URL = 'https://your-project.supabase.co';
-export const SUPABASE_ANON_KEY = 'your-anon-key-here';
+export const SUPABASE_URL = 'https://blmwfzfwmzmfvrcmvdld.supabase.co';
+export const SUPABASE_ANON_KEY = 'sb_publishable_Srkf6tt_vHtEg33u_P7kfA_BX6HbsYs';
