@@ -17,7 +17,6 @@ import {
   StyleSheet,
   SafeAreaView,
   Alert,
-  Switch,
 } from 'react-native';
 import { Colors } from '../theme/colors';
 import { useAppStore } from '../store/useAppStore';
