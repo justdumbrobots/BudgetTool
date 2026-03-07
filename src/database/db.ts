@@ -88,9 +88,10 @@ export function setSetting(key: string, value: string): void {
 
 // ─── UserProfile ──────────────────────────────────────────────────────────────
 
-export function loadProfile(): UserProfile | null {
+export function loadProfile(userId: string): UserProfile | null {
   const row = getDb().getFirstSync<UserProfile>(
-    'SELECT * FROM user_profile LIMIT 1',
+    'SELECT * FROM user_profile WHERE id = ?',
+    [userId],
   );
   return row ?? null;
 }

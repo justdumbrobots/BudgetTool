@@ -119,6 +119,7 @@ export const FREQUENCY_LABELS: Record<BillFrequency | PayFrequency, string> = {
 // ─── Navigation Types ────────────────────────────────────────────────────────
 
 export type RootStackParamList = {
+  Login: undefined;
   Onboarding: undefined;
   Main: undefined;
   PeriodDetail: { periodIndex: number };

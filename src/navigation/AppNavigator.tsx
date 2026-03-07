@@ -1,27 +1,39 @@
 /**
  * App Navigation
  *
- * Structure:
+ * Auth flow:
+ *   No session           → Login screen
+ *   Session, !onboarded  → Onboarding wizard
+ *   Session, onboarded   → Main tab navigator
+ *
+ * When the authenticated user changes (sign-in / sign-out), the app store
+ * is re-initialized or reset so that each user sees only their own data.
+ *
+ * Stack structure:
  *   Root Stack
- *   ├── Onboarding (shown when !isOnboarded)
- *   ├── PeriodDetail (pushed from Timeline or Dashboard)
+ *   ├── Login          (auth gate)
+ *   ├── Onboarding     (first-time setup)
+ *   ├── PeriodDetail   (pushed from Timeline or Dashboard)
  *   └── Main Tabs
  *       ├── Dashboard
  *       ├── Timeline
  *       ├── Bills
  *       └── Settings
  */
-import React from 'react';
+
+import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text, View } from 'react-native';
+import { Text, View, ActivityIndicator, StyleSheet } from 'react-native';
 
 import { Colors } from '../theme/colors';
 import { RootStackParamList } from '../types';
+import { useAuthStore } from '../store/useAuthStore';
 import { useAppStore } from '../store/useAppStore';
 
 // Screens
+import { LoginScreen }         from '../screens/auth/LoginScreen';
 import { OnboardingScreen }    from '../screens/OnboardingScreen';
 import { DashboardScreen }     from '../screens/DashboardScreen';
 import { TimelineScreen }      from '../screens/TimelineScreen';
@@ -31,12 +43,21 @@ import { PeriodDetailScreen }  from '../screens/PeriodDetailScreen';
 
 // ─── Tab icons (text-based, no icon library dependency at runtime) ─────────────
 
-function TabIcon({ icon, label, focused }: { icon: string; label: string; focused: boolean }) {
+function TabIcon({ icon, focused }: { icon: string; focused: boolean }) {
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ fontSize: 20, color: focused ? Colors.accent : Colors.textMuted }}>
-        {icon}
-      </Text>
+    <Text style={{ fontSize: 20, color: focused ? Colors.accent : Colors.textMuted }}>
+      {icon}
+    </Text>
+  );
+}
+
+// ─── Loading Overlay ──────────────────────────────────────────────────────────
+
+function LoadingScreen({ message }: { message: string }) {
+  return (
+    <View style={styles.loading}>
+      <ActivityIndicator size="large" color={Colors.accent} />
+      <Text style={styles.loadingText}>{message}</Text>
     </View>
   );
 }
@@ -72,7 +93,7 @@ function MainTabs() {
         component={DashboardScreen}
         options={{
           title: 'Dashboard',
-          tabBarIcon: ({ focused }) => <TabIcon icon="⬡" label="Home" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabIcon icon="⬡" focused={focused} />,
         }}
       />
       <Tab.Screen
@@ -80,7 +101,7 @@ function MainTabs() {
         component={TimelineScreen}
         options={{
           title: 'Timeline',
-          tabBarIcon: ({ focused }) => <TabIcon icon="≡" label="Timeline" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabIcon icon="≡" focused={focused} />,
         }}
       />
       <Tab.Screen
@@ -88,7 +109,7 @@ function MainTabs() {
         component={BillsManagerScreen}
         options={{
           title: 'Bills',
-          tabBarIcon: ({ focused }) => <TabIcon icon="$" label="Bills" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabIcon icon="$" focused={focused} />,
         }}
       />
       <Tab.Screen
@@ -96,7 +117,7 @@ function MainTabs() {
         component={SettingsScreen}
         options={{
           title: 'Settings',
-          tabBarIcon: ({ focused }) => <TabIcon icon="⚙" label="Settings" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabIcon icon="⚙" focused={focused} />,
         }}
       />
     </Tab.Navigator>
@@ -106,7 +127,27 @@ function MainTabs() {
 // ─── Root Stack Navigator ─────────────────────────────────────────────────────
 
 export function AppNavigator() {
-  const { isOnboarded } = useAppStore();
+  const { user, isLoading: authLoading } = useAuthStore();
+  const { initialize, reset, isOnboarded, isLoading: dataLoading } = useAppStore();
+
+  // Re-initialize app data whenever the logged-in user changes
+  useEffect(() => {
+    if (user) {
+      initialize(user.id);
+    } else {
+      reset();
+    }
+  }, [user?.id]);
+
+  // Show spinner while auth session is being restored
+  if (authLoading) {
+    return <LoadingScreen message="Restoring session…" />;
+  }
+
+  // Show spinner while the user's data is being loaded from SQLite
+  if (user && dataLoading) {
+    return <LoadingScreen message="Loading your budget…" />;
+  }
 
   return (
     <NavigationContainer>
@@ -118,13 +159,22 @@ export function AppNavigator() {
           contentStyle: { backgroundColor: Colors.bgPrimary },
         }}
       >
-        {!isOnboarded ? (
+        {!user ? (
+          // ── Auth gate ──────────────────────────────────────────────────────
+          <Stack.Screen
+            name="Login"
+            component={LoginScreen}
+            options={{ headerShown: false }}
+          />
+        ) : !isOnboarded ? (
+          // ── First-time setup ───────────────────────────────────────────────
           <Stack.Screen
             name="Onboarding"
             component={OnboardingScreen}
             options={{ title: 'Welcome to PayPeriod', headerShown: false }}
           />
         ) : (
+          // ── Main app ───────────────────────────────────────────────────────
           <>
             <Stack.Screen
               name="Main"
@@ -142,3 +192,17 @@ export function AppNavigator() {
     </NavigationContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  loading: {
+    flex: 1,
+    backgroundColor: Colors.bgPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: Colors.textMuted,
+  },
+});

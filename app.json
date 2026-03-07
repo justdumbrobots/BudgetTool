@@ -30,6 +30,7 @@
     "plugins": [
       "expo-sqlite"
     ],
+    "scheme": "payperiod",
     "experiments": {
       "baseUrl": "/BudgetTool"
     }
