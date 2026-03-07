@@ -9,6 +9,7 @@
  */
 
 import { create } from 'zustand';
+import { Platform } from 'react-native';
 import { User, Session } from '@supabase/supabase-js';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
@@ -78,6 +79,20 @@ export const useAuthStore = create<AuthState & AuthActions>((set) => ({
   async signInWithGoogle() {
     set({ error: null });
     try {
+      if (Platform.OS === 'web') {
+        // On web/PWA: let Supabase do a full browser redirect.
+        // After Google auth, Supabase redirects back here and
+        // onAuthStateChange picks up the session automatically.
+        const redirectTo = window.location.href.split('?')[0].split('#')[0];
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo },
+        });
+        if (error) throw error;
+        return; // browser will navigate away
+      }
+
+      // Native (iOS/Android): use WebBrowser popup approach
       const redirectUrl = makeRedirectUri();
 
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -94,9 +109,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set) => ({
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
 
       if (result.type === 'success') {
-        // Parse tokens from redirect URL
         const url = new URL(result.url);
-        // Supabase returns tokens in the fragment (#) as a query string
         const fragment = url.hash.startsWith('#') ? url.hash.slice(1) : url.hash;
         const params = new URLSearchParams(fragment || url.search);
 
