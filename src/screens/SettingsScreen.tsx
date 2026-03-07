@@ -20,12 +20,21 @@ import {
 } from 'react-native';
 import { Colors } from '../theme/colors';
 import { useAppStore } from '../store/useAppStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { PickerModal } from '../components/PickerModal';
 import { PayFrequency, PAY_FREQUENCIES, FREQUENCY_LABELS } from '../types';
 import { formatCurrency } from '../utils/formatters';
 
 export function SettingsScreen() {
   const { profile, saveProfileAction } = useAppStore();
+  const { user, signOut } = useAuthStore();
+
+  const handleSignOut = () => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign Out', style: 'destructive', onPress: signOut },
+    ]);
+  };
 
   const [frequency, setFrequency] = useState<PayFrequency>(profile?.payFrequency ?? 'bi-weekly');
   const [anchorDate, setAnchorDate] = useState(profile?.anchorPayDate ?? '');
@@ -167,6 +176,17 @@ export function SettingsScreen() {
           </View>
         )}
 
+        {/* Account */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account</Text>
+          <View style={styles.card}>
+            {user && <InfoRow label="Signed in as" value={user.email ?? 'Google account'} />}
+            <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
+              <Text style={styles.signOutBtnText}>Sign Out</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         <View style={{ height: 40 }} />
       </ScrollView>
 
@@ -282,5 +302,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textPrimary,
     fontWeight: '600',
+  },
+  signOutBtn: {
+    backgroundColor: Colors.bgInput,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.textExpense,
+    marginTop: 4,
+  },
+  signOutBtnText: {
+    color: Colors.textExpense,
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

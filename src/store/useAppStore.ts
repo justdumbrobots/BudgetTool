@@ -2,7 +2,10 @@
  * Zustand store — single source of truth for all app state.
  *
  * SQLite is the persistence layer; this store holds the in-memory view.
- * Call `initialize()` on app startup to hydrate from the database.
+ * Call `initialize(userId)` whenever the authenticated user changes to
+ * hydrate their data from the database.
+ *
+ * Call `reset()` on sign-out to wipe in-memory state.
  *
  * Computed periods are derived whenever profile, bills, or extras change.
  */
@@ -40,6 +43,7 @@ import { generateId } from '../utils/formatters';
 
 interface AppState {
   // Persisted
+  userId: string | null;
   profile: UserProfile | null;
   bills: Bill[];
   extras: ExtraItem[];
@@ -57,7 +61,8 @@ interface AppState {
 // ─── Actions Shape ────────────────────────────────────────────────────────────
 
 interface AppActions {
-  initialize: () => void;
+  initialize: (userId: string) => void;
+  reset: () => void;
   completeOnboarding: () => void;
 
   // Profile
@@ -112,68 +117,83 @@ function recompute(
   return { periods, computedPeriods };
 }
 
+const INITIAL_STATE = {
+  userId: null as string | null,
+  profile: null as UserProfile | null,
+  bills: [] as Bill[],
+  extras: [] as ExtraItem[],
+  isOnboarded: false,
+  periods: [] as PayPeriod[],
+  computedPeriods: [] as ComputedPeriod[],
+  isLoading: true,
+  error: null as string | null,
+};
+
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 export const useAppStore = create<AppState & AppActions>((set, get) => ({
-  // Initial state
-  profile: null,
-  bills: [],
-  extras: [],
-  isOnboarded: false,
-  periods: [],
-  computedPeriods: [],
-  isLoading: true,
-  error: null,
+  ...INITIAL_STATE,
 
   // ── Initialization ─────────────────────────────────────────────────────────
+  // Called by AppNavigator whenever the authenticated user changes.
+  // The userId comes from Supabase auth and becomes the profile's primary key.
 
-  initialize() {
+  initialize(userId: string) {
     try {
       initDatabase();
 
-      const isOnboarded = getSetting('isOnboarded') === 'true';
-      const profile = loadProfile();
+      const isOnboarded = getSetting(`isOnboarded_${userId}`) === 'true';
+      const profile = loadProfile(userId);
       const bills = profile ? loadBills(profile.id) : [];
       const extras = profile ? loadExtras(profile.id) : [];
       const { periods, computedPeriods } = recompute(profile, bills, extras);
 
-      set({ profile, bills, extras, isOnboarded, periods, computedPeriods, isLoading: false });
+      set({ userId, profile, bills, extras, isOnboarded, periods, computedPeriods, isLoading: false });
     } catch (e) {
       set({ isLoading: false, error: String(e) });
     }
   },
 
+  // ── Reset ──────────────────────────────────────────────────────────────────
+  // Called on sign-out to clear all in-memory user data.
+
+  reset() {
+    set({ ...INITIAL_STATE, isLoading: false });
+  },
+
   completeOnboarding() {
-    setSetting('isOnboarded', 'true');
+    const { userId } = get();
+    if (userId) setSetting(`isOnboarded_${userId}`, 'true');
     set({ isOnboarded: true });
   },
 
   // ── Profile ────────────────────────────────────────────────────────────────
 
   saveProfileAction(data) {
-    const existing = get().profile;
-    const profile: UserProfile = {
-      id: existing?.id ?? generateId(),
+    const { userId, profile, bills, extras } = get();
+    const resolvedId = userId ?? profile?.id ?? generateId();
+
+    const newProfile: UserProfile = {
+      id: resolvedId,
       ...data,
-      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      createdAt: profile?.createdAt ?? new Date().toISOString(),
     };
 
-    saveProfile(profile);
+    saveProfile(newProfile);
 
-    const { bills, extras } = get();
-    const { periods, computedPeriods } = recompute(profile, bills, extras);
-    set({ profile, periods, computedPeriods });
+    const { periods, computedPeriods } = recompute(newProfile, bills, extras);
+    set({ profile: newProfile, periods, computedPeriods });
   },
 
   // ── Bills ──────────────────────────────────────────────────────────────────
 
   addBill(data) {
-    const { profile, bills, extras } = get();
+    const { userId, profile, bills, extras } = get();
     if (!profile) return;
 
     const bill: Bill = {
       id: generateId(),
-      userId: profile.id,
+      userId: userId ?? profile.id,
       sortOrder: bills.length,
       status: 'active',
       createdAt: new Date().toISOString(),
@@ -210,12 +230,12 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
   // ── Extras ─────────────────────────────────────────────────────────────────
 
   addExtra(data) {
-    const { profile, bills, extras } = get();
+    const { userId, profile, bills, extras } = get();
     if (!profile) return;
 
     const item: ExtraItem = {
       id: generateId(),
-      userId: profile.id,
+      userId: userId ?? profile.id,
       createdAt: new Date().toISOString(),
       ...data,
     };
